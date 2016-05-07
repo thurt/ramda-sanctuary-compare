@@ -74,9 +74,11 @@ Promise.all([
 .then(([$ramda, $sanctuary]) => {
   var x_fns = Array.from($ramda.querySelectorAll('section.card'))
     .map(card => card.getAttribute('id'))
+    .sort()
 
   var y_fns = Array.from($sanctuary.querySelectorAll('h4[name]'))
     .map(h4 => h4.getAttribute('name').split('-').reverse()[0])
+    .sort()
 
   var shared_fns = x_fns
     .map(x_fn => [x_fn, y_fns.includes(x_fn)])
