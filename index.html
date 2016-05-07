@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Ramda-Sanctuary Compare</title>
+    <style type="text/css">
+      .col {
+        padding: 0 2em;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h2>Compare Results</h2>
+      <div>
+        <div>Ramda Total: <span data-key="ramda-total">?</span></div>
+        <div>Sanctuary Total: <span data-key="sanctuary-total">?</span></div>
+      </div>
+      <div style="display:flex">
+        <div class="col">
+          <h3>Shared Functions (<span data-key="shared-count">?</span>)</h3>
+          <pre data-key="shared-fns"></pre>
+        </div>
+        <div class="col">
+          <h3>Ramda Only (<span data-key="ramda-only-count">?</span>)</h3>
+          <pre data-key="ramda-only-fns"></pre>
+        </div>
+        <div class="col">
+          <h3>Sanctuary Only (<span data-key="sanctuary-only-count">?</span>)</h3>
+          <pre data-key="sanctuary-only-fns"></pre>
+      </div>
+    </div>
+    <script src="main.js"></script>
+  </body>
+</html>
