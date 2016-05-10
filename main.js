@@ -1,3 +1,30 @@
+// pipe :: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
+function pipe(...fns) {
+  return (...x) =>
+    fns.slice(1).reduce((x, fn) => fn(x), fns[0](...x))
+}
+
+// map :: (a -> b) -> [a] -> [b]
+function map(fn) {
+  return (f) => f.map(fn)
+}
+
+// adjust :: (a -> a) -> Number -> [a] -> [a]
+function adjust(fn) {
+  return (i) => (list) => {
+    var copy = list.slice()
+    copy.splice(i, 1, fn(list[i]))
+    return copy
+  }
+}
+
+// toPairs :: Object -> Array
+function toPairs(obj) {
+  return Reflect.ownKeys(obj).map(key => [key, obj[key]])
+}
+
+/////////////////////////////////////////////////////
+
 // fetchStr :: Object -> Promise String
 function fetchStr({ url, init }) {
   return window.fetch(url, init).then((res, rej) => {
@@ -15,44 +42,6 @@ function toHTMLDocument(pstr) {
   })
 }
 
-// pipe :: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
-function pipe(...fns) {
-  return (...x) =>
-    fns.slice(1).reduce((x, fn) => fn(x), fns[0](...x))
-}
-
-// fetchDOM :: Object -> Promise HTMLDocument
-var fetchDOM = pipe(fetchStr, toHTMLDocument)
-
-// gets all html elements with data-key attribute and stores them in a dictonary.
-// later, using DataBind function triggers a setter function for that key
-// which applies the assigned value to the associated node.textContent
-var DataBind = (() => {
-  // private member
-  var _binder = Array.from(document.querySelectorAll('[data-key]'))
-    .reduce((dict, node) => {
-      Object.defineProperty(dict, node.dataset.key, {
-        set(new_value) {
-          // node is in the closure
-          node.textContent = new_value
-        }
-      })
-      return dict
-    }, {})
-
-  // DataBind function
-  return (kv_pairs) => {
-    for (var [k, v] of entries(kv_pairs)) {
-      _binder[k] = v
-    }
-  }
-})()
-
-// entries :: Object -> Array
-function entries(obj) {
-  return Reflect.ownKeys(obj).map(key => [key, obj[key]])
-}
-
 // accept :: String -> Headers { 'Accept': String }
 function accept(mediaTypeStr) {
   var accept_hdr = new window.Headers()
@@ -60,14 +49,37 @@ function accept(mediaTypeStr) {
   return accept_hdr
 }
 
-///////////////////////////////////////////////////
+// getElementByDataKey :: String -> HTMLElement
+function getElementByDataKey(key) {
+  return document.querySelector(`[data-key=${key}]`)
+}
+
+// setTextContent :: Array -> _
+function setTextContent([node, value]) {
+  node.textContent = value
+}
+
+// fetchDOM :: Object -> Promise HTMLDocument
+var fetchDOM = pipe(fetchStr, toHTMLDocument)
+
+// DataBind :: Object -> _
+var DataBind = pipe(
+  toPairs,
+  map(
+    pipe(
+      adjust(getElementByDataKey)(0), // adjust is mutating type here
+      setTextContent
+    )
+  )
+)
+//////////////////////////////////////////////////////
 
 // input data
 var ramda = {
   url: 'http://ramdajs.com/0.21.0/docs/'
 }
 var sanctuary = {
-  url: 'http://api.github.com/repos/sanctuary-js/sanctuary/readme',
+  url: 'https://api.github.com/repos/sanctuary-js/sanctuary/readme',
   init: { 'headers': accept('application/vnd.github.v3.html') }
 }
 
