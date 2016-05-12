@@ -1,12 +1,20 @@
-// pipe :: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
-function pipe(...fns) {
-  return (...x) =>
-    fns.slice(1).reduce((x, fn) => fn(x), fns[0](...x))
+
+//* Library *///////////////////////////////////////////
+
+// pipeP :: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
+function pipeP(...fns) {
+  return (...xs) =>
+    fns.slice(1).reduce((xP, fn) => xP.then(fn), Promise.resolve(fns[0](...xs)))
 }
 
 // map :: (a -> b) -> [a] -> [b]
 function map(fn) {
   return (f) => f.map(fn)
+}
+
+// last :: [a] -> a
+function last(xs) {
+  return xs[xs.length - 1]
 }
 
 // adjust :: (a -> a) -> Number -> [a] -> [a]
@@ -23,7 +31,8 @@ function toPairs(obj) {
   return Reflect.ownKeys(obj).map(key => [key, obj[key]])
 }
 
-/////////////////////////////////////////////////////
+
+//* Domain Layer *//////////////////////////////////////
 
 // fetchStr :: Object -> Promise String
 function fetchStr({ url, init }) {
@@ -33,20 +42,11 @@ function fetchStr({ url, init }) {
   })
 }
 
-// toHTMLDocument :: Promise String -> Promise HTMLDocument
-function toHTMLDocument(pstr) {
-  return pstr.then(htmlStr => {
-    var doc = document.implementation.createHTMLDocument()
-    doc.documentElement.innerHTML = htmlStr
-    return doc.documentElement
-  })
-}
-
-// accept :: String -> Headers { 'Accept': String }
-function accept(mediaTypeStr) {
-  var accept_hdr = new window.Headers()
-  accept_hdr.append('Accept', mediaTypeStr)
-  return accept_hdr
+// toHTMLDocument :: String -> HTMLDocument
+function toHTMLDocument(str) {
+  var doc = document.implementation.createHTMLDocument()
+  doc.documentElement.innerHTML = str
+  return doc.documentElement
 }
 
 // getElementByDataKey :: String -> HTMLElement
@@ -59,42 +59,54 @@ function setTextContent([node, value]) {
   node.textContent = value
 }
 
+// accept :: String -> Headers { 'Accept': String }
+function accept(mediaTypeStr) {
+  var accept_hdr = new window.Headers()
+  accept_hdr.append('Accept', mediaTypeStr)
+  return accept_hdr
+}
+
+
+//* Domain Compositions *///////////////////////////////
+
 // fetchDOM :: Object -> Promise HTMLDocument
-var fetchDOM = pipe(fetchStr, toHTMLDocument)
+var fetchDOM = pipeP(fetchStr, toHTMLDocument)
+
+// get_R_names :: Object -> Promise [String]
+var get_R_names = pipeP(
+  fetchDOM,
+  ($R) => Array.from($R.querySelectorAll('section.card'))
+    .map(card => card.getAttribute('id'))
+    .sort())
+
+// get_S_names :: Object -> Promise [String]
+var get_S_names = pipeP(
+  fetchDOM,
+  ($S) => Array.from($S.querySelectorAll('h4[name]'))
+      .map(h4 => last(h4.getAttribute('name').split('-')))
+      .sort())
 
 // DataBind :: Object -> _
-var DataBind = pipe(
+var DataBind = pipeP(
   toPairs,
-  map(
-    pipe(
-      adjust(getElementByDataKey)(0), // adjust is mutating type here
-      setTextContent
-    )
-  )
-)
-//////////////////////////////////////////////////////
+  map(adjust(getElementByDataKey)(0)), // adjust is mutating tuple type here
+  map(setTextContent))
 
-// input data
-var ramda = {
+
+//* Input Data */////////////////////////////////////////
+
+var r_url = {
   url: 'http://ramdajs.com/0.21.0/docs/'
 }
-var sanctuary = {
+var s_url = {
   url: 'https://api.github.com/repos/sanctuary-js/sanctuary/readme',
   init: { 'headers': accept('application/vnd.github.v3.html') }
 }
 
-Promise.all([ramda, sanctuary].map(fetchDOM))
-  // Perform DOM scraping to get function names
-  .then(([$R, $S]) => [
-    Array.from($R.querySelectorAll('section.card'))
-      .map(card => card.getAttribute('id'))
-      .sort()
-    ,
-    Array.from($S.querySelectorAll('h4[name]'))
-      .map(h4 => h4.getAttribute('name').split('-').reverse()[0])
-      .sort()
-  ])
 
+//* "Fork" & Merge operations */////////////////////////////
+
+Promise.all([get_R_names(r_url), get_S_names(s_url)])
   // Determine shared function names, R-only names, and S-only names
   .then(([R_names, S_names]) => [
     R_names
