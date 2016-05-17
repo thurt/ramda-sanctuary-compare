@@ -1,66 +1,77 @@
 
 //* Library *///////////////////////////////////////////
 
-// pipeP :: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
-function pipeP(...fns) {
-  return (...xs) =>
-    fns.slice(1).reduce((xP, fn) => xP.then(fn), Promise.resolve(fns[0](...xs)))
+//:: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
+const pipeP = (...fns) => (...xs) => {
+  return fns
+    .slice(1)
+    .reduce((xP, fn) => xP.then(fn), Promise.resolve(fns[0](...xs)))
 }
 
-// map :: (a -> b) -> [a] -> [b]
-function map(fn) {
-  return (f) => f.map(fn)
+//:: (a -> b) -> [a] -> [b]
+const map = (fn) => (f) => {
+  return f.map(fn)
 }
 
-// last :: [a] -> a
-function last(xs) {
+//:: [a] -> a
+const last = (xs) => {
   return xs[xs.length - 1]
 }
 
-// adjust :: (a -> a) -> Number -> [a] -> [a]
-function adjust(fn) {
-  return (i) => (list) => {
-    var copy = list.slice()
-    copy.splice(i, 1, fn(list[i]))
-    return copy
-  }
+//:: (a -> a) -> Number -> [a] -> [a]
+const adjust = (fn) => (i) => (list) => {
+  var copy = list.slice()
+  copy.splice(i, 1, fn(list[i]))
+  return copy
 }
 
-// toPairs :: Object -> Array
-function toPairs(obj) {
+//:: Object -> Array
+const toPairs = (obj) => {
   return Reflect.ownKeys(obj).map(key => [key, obj[key]])
 }
 
-
+const Maybe = (x) => {
+  return (x === null) ? Nothing() : Just(x)
+}
+const Just = (x) => {
+  return {
+    map(fn) { return Maybe(fn(x)) }
+  }
+}
+const Nothing = () => {
+  return {
+    map(fn) { return Maybe(null) }
+  }
+}
 //* Domain Layer *//////////////////////////////////////
 
-// fetchStr :: Object -> Promise String
-function fetchStr({ url, init }) {
+//:: Object -> Promise String
+const fetchStr = ({ url, init }) => {
   return window.fetch(url, init).then((res, rej) => {
     if (rej) throw new Error(rej) // could throw
     return res.text()
   })
 }
 
-// toHTMLDocument :: String -> HTMLDocument
-function toHTMLDocument(str) {
+//:: String -> HTMLDocument
+const toHTMLDocument = (str) => {
   var doc = document.implementation.createHTMLDocument()
   doc.documentElement.innerHTML = str
   return doc.documentElement
 }
 
-// getElementByDataKey :: String -> HTMLElement
-function getElementByDataKey(key) {
-  return document.querySelector(`[data-key=${key}]`)
+//:: String -> Maybe HTMLElement
+const getElementByDataKey = (key) => {
+  return Maybe(document.querySelector(`[data-key=${key}]`))
 }
 
-// setTextContent :: Array -> _
-function setTextContent([node, value]) {
-  node.textContent = value
+//:: [Maybe Node, String] -> _
+const setNodeTextContent = ([nodeM, text]) => {
+  nodeM.map(node => node.textContent = text)
 }
 
-// accept :: String -> Headers { 'Accept': String }
-function accept(mediaTypeStr) {
+//:: String -> Headers { 'Accept': String }
+const accept = (mediaTypeStr) => {
   var accept_hdr = new window.Headers()
   accept_hdr.append('Accept', mediaTypeStr)
   return accept_hdr
@@ -69,36 +80,36 @@ function accept(mediaTypeStr) {
 
 //* Domain Compositions *///////////////////////////////
 
-// fetchDOM :: Object -> Promise HTMLDocument
-var fetchDOM = pipeP(fetchStr, toHTMLDocument)
+//:: Object -> Promise HTMLDocument
+const fetchDOM = pipeP(fetchStr, toHTMLDocument)
 
-// get_R_names :: Object -> Promise [String]
-var get_R_names = pipeP(
+//:: Object -> Promise [String]
+const get_R_names = pipeP(
   fetchDOM,
   ($R) => Array.from($R.querySelectorAll('section.card'))
     .map(card => card.getAttribute('id'))
     .sort())
 
-// get_S_names :: Object -> Promise [String]
-var get_S_names = pipeP(
+//:: Object -> Promise [String]
+const get_S_names = pipeP(
   fetchDOM,
   ($S) => Array.from($S.querySelectorAll('h4[name]'))
       .map(h4 => last(h4.getAttribute('name').split('-')))
       .sort())
 
-// DataBind :: Object -> _
-var DataBind = pipeP(
+//:: Object -> _
+const DataBind = pipeP(
   toPairs,
   map(adjust(getElementByDataKey)(0)), // adjust is mutating tuple type here
-  map(setTextContent))
+  map(setNodeTextContent))
 
 
 //* Input Data */////////////////////////////////////////
 
-var r_url = {
+const r_url = {
   url: 'http://ramdajs.com/0.21.0/docs/'
 }
-var s_url = {
+const s_url = {
   url: 'https://api.github.com/repos/sanctuary-js/sanctuary/readme',
   init: { 'headers': accept('application/vnd.github.v3.html') }
 }
