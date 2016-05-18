@@ -2,6 +2,11 @@
 //* Library *///////////////////////////////////////////
 
 //:: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
+const pipe = (...fns) => (...xs) => {
+  return fns
+    .slice(1)
+    .reduce((x, fn) => fn(x), fns[0](...xs))
+}
 const pipeP = (...fns) => (...xs) => {
   return fns
     .slice(1)
@@ -16,6 +21,11 @@ const map = (fn) => (f) => {
 //:: [a] -> a
 const last = (xs) => {
   return xs[xs.length - 1]
+}
+
+//:: (a -> b -> c) -> b -> a -> c
+const flip = (fn) => (b) => (a) => {
+  return fn(a)(b)
 }
 
 //:: (a -> a) -> Number -> [a] -> [a]
@@ -114,6 +124,29 @@ const Either = (() => {
   return Either
 })()
 
+// IO type
+const IO = (() => {
+  const newIO = (fn) => {
+    return Object.freeze(Object.create(_IO, { __value: { value: fn }}))
+  }
+
+  const _IO = Object.freeze({
+    runIO() {
+      return this.__value()
+    },
+    map(fn) {
+      return newIO(() => fn(this.__value()))
+    }
+  })
+
+  const IO = (fn) => {
+    return newIO(fn)
+  }
+
+  return Object.freeze(IO)
+})()
+
+
 //* Domain Layer *//////////////////////////////////////
 
 //:: Object -> Promise String
@@ -131,13 +164,15 @@ const toHTMLDocument = (str) => {
   return doc.documentElement
 }
 
-//:: String -> Either String HTMLElement
+//:: String -> IO Either String HTMLElement
 const getElementByDataKey = (key) => {
-  const el = document.querySelector(`[data-key=${key}]`)
+  return IO(() => {
+    const el = document.querySelector(`[data-key=${key}]`)
 
-  return (Maybe(el).isNothing)
-    ? Either.Left(`get element by data-key "${key}" is not found`)
-    : Either.Right(el)
+    return (Maybe(el).isNothing)
+      ? Either.Left(`get element by data-key "${key}" is not found`)
+      : Either.Right(el)
+  })
 }
 
 //:: Node -> String -> _
@@ -177,18 +212,20 @@ const get_S_names = pipeP(
       .sort()
   })
 
-//:: Object -> _
-const DataBind = pipeP(
+//:: Object -> IO _
+const DataBind = pipe(
   toPairs,
-  map(adjust(getElementByDataKey)(0)), // [String, String] => [Either, String]
-  map(([elE, text]) => {
-    Either.bimap
-      (msg => console.warn(msg))
-      (el => setNodeTextContent(el)(text))
-      (elE)
-    return undefined
-  }))
-
+  map(([key, text]) => {
+    return map
+      (Either.bimap (console.warn) (flip(setNodeTextContent)(text)) )
+      (getElementByDataKey(key))
+  }),
+  (IO_list) => {
+    return IO(() => {
+      IO_list.forEach(io => io.runIO())
+      return undefined
+    })
+  })
 
 //* Input Data */////////////////////////////////////////
 
@@ -222,7 +259,7 @@ Promise.all([get_R_names(r_url), get_S_names(s_url)])
       'ramda-only-fns': R_only.join('\n'),
       'sanctuary-only-count': S_only.length,
       'sanctuary-only-fns': S_only.join('\n')
-    })
+    }).runIO()
   })
 
 .catch(err => {
