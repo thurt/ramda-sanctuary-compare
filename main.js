@@ -22,6 +22,11 @@ const map = (fn) => (f) => {
 const last = (xs) => {
   return xs[xs.length - 1]
 }
+/*
+//:: Int -> [a] -> a
+const nth = (n) => (xs) => {
+  return xs[n]
+}
 
 //:: (a -> b -> c) -> b -> a -> c
 const flip = (fn) => (b) => (a) => {
@@ -34,7 +39,7 @@ const adjust = (fn) => (i) => (list) => {
   copy.splice(i, 1, fn(list[i]))
   return copy
 }
-
+*/
 //:: Object -> Array
 const toPairs = (obj) => {
   return Reflect.ownKeys(obj).map(key => [key, obj[key]])
@@ -161,6 +166,12 @@ const IO = (() => {
     return newIO(() => x)
   }
 
+  constructor.sequence = (IO_list) => {
+    return IO(() => {
+      return IO_list.reduce(io => io.runIO(), [])
+    })
+  }
+
   return Object.freeze(constructor)
 })()
 
@@ -239,13 +250,7 @@ const DataBind = pipe(
     return getElementByDataKey(key).map
       (Either.bimap (console.warn) (setNodeTextContent(str)))
   }),
-  (IO_list) => {
-    return IO(() => {
-      IO_list.forEach(io => io.runIO())
-      return undefined
-    })
-  })
-
+  IO.sequence)
 
 
 //* Input Data */////////////////////////////////////////
