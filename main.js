@@ -89,6 +89,12 @@ const Either = (() => {
     map(_) {
       return this
     },
+    bimap(fn) {
+      const me = this
+      return (_) => {
+        return newE(Left)(fn(me.__value))
+      }
+    },
     isLeft: true,
     isRight: false
   })
@@ -96,6 +102,12 @@ const Either = (() => {
   const Right = Object.freeze({
     map(fn) {
       return newE(Right)(fn(this.__value))
+    },
+    bimap(_) {
+      const me = this
+      return (fn) => {
+        return me.map(fn)
+      }
     },
     isLeft: false,
     isRight: true
@@ -115,9 +127,7 @@ const Either = (() => {
       return Left.isPrototypeOf(E)
     },
     bimap: (leftFn) => (rightFn) => (E) => {
-      return E.isLeft
-        ? newE(Left)(leftFn(E.__value))
-        : E.map(rightFn)
+      E.bimap(leftFn)(rightFn)
     }
   })
 
@@ -127,23 +137,31 @@ const Either = (() => {
 // IO type
 const IO = (() => {
   const newIO = (fn) => {
-    return Object.freeze(Object.create(_IO, { __value: { value: fn }}))
+    return Object.freeze(Object.create(IO, { __value: { value: fn }}))
   }
 
-  const _IO = Object.freeze({
-    runIO() {
-      return this.__value()
+  const IO = Object.freeze({
+    runIO(...args) {
+      return this.__value(...args)
     },
     map(fn) {
       return newIO(() => fn(this.__value()))
     }
   })
 
-  const IO = (fn) => {
-    return newIO(fn)
+  const constructor = (fn) => {
+    if (Function.prototype.isPrototypeOf(fn)) {
+      return newIO(fn)
+    } else {
+      throw new TypeError(`IO constructor expected type Function`)
+    }
   }
 
-  return Object.freeze(IO)
+  constructor.of = (x) => {
+    return newIO(() => x)
+  }
+
+  return Object.freeze(constructor)
 })()
 
 
@@ -164,7 +182,7 @@ const toHTMLDocument = (str) => {
   return doc.documentElement
 }
 
-//:: String -> IO Either String HTMLElement
+//:: String -> IO (Either String HTMLElement)
 const getElementByDataKey = (key) => {
   return IO(() => {
     const el = document.querySelector(`[data-key=${key}]`)
@@ -175,10 +193,12 @@ const getElementByDataKey = (key) => {
   })
 }
 
-//:: Node -> String -> _
-const setNodeTextContent = (N) => (str) => {
-  N.textContent = str
-  return undefined
+//:: String -> Node -> IO _
+const setNodeTextContent = (str) => (N) => {
+  //return IO(() => {
+    N.textContent = str
+    return undefined
+  //})
 }
 
 //:: String -> Headers { 'Accept': String }
@@ -215,10 +235,9 @@ const get_S_names = pipeP(
 //:: Object -> IO _
 const DataBind = pipe(
   toPairs,
-  map(([key, text]) => {
-    return map
-      (Either.bimap (console.warn) (flip(setNodeTextContent)(text)) )
-      (getElementByDataKey(key))
+  map(([key, str]) => {
+    return getElementByDataKey(key).map
+      (Either.bimap (console.warn) (setNodeTextContent(str)))
   }),
   (IO_list) => {
     return IO(() => {
@@ -226,6 +245,8 @@ const DataBind = pipe(
       return undefined
     })
   })
+
+
 
 //* Input Data */////////////////////////////////////////
 
