@@ -52,6 +52,13 @@ const toPairs = (obj) => {
   return Reflect.ownKeys(obj).map(key => [key, obj[key]])
 }
 
+//:: (a -> Bool) -> (a -> b) -> (a -> b) -> a -> b
+const ifElse = (predFn) => (whenTrueFn) => (whenFalseFn) => (a) =>{
+  return predFn(a)
+    ? whenTrueFn(a)
+    : whenFalseFn(a)
+}
+
 // Maybe type
 const Maybe = (() => {
   const newM = (type) => (value) => {
@@ -184,6 +191,10 @@ const IO = (() => {
   constructor.run = (io) => {
     return io.runIO()
   }
+  //:: (b -> c) -> (a -> b) -> b -> c
+  constructor.wrap = (fn) => (value) => {
+    return constructor.of(value).map(fn)
+  }
 
   constructor.sequence = (IO_list) => {
     return newIO(() => {
@@ -265,11 +276,9 @@ const setNodeTextContent = (str) => (N) => {
 //:: (String, String) -> IO _
 const getElementByDataKey_setNodeTextContent = ([key, str]) => {
   return getElementByDataKey(key)
-    .chain(E => {
-      return E.isLeft
-        ? IO(() => E.map(pipe(consoleWarn, IO.run)))
-        : IO(() => E.map(pipe(setNodeTextContent(str), IO.run)))
-    })
+    .chain(ifElse(Either.isLeft)
+        (IO.wrap(map(pipe(consoleWarn, IO.run))))
+        (IO.wrap(map(pipe(setNodeTextContent(str), IO.run)))))
 }
 
 
