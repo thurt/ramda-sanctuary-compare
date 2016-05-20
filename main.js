@@ -1,5 +1,10 @@
 
 //* Library *///////////////////////////////////////////
+//:: a -> a
+const trace = (x) => {
+  console.log(x)
+  return x
+}
 
 //:: ((a, b, ... -> e), (e -> f), ..., (y -> z)) -> (a, b, ...) -> z
 const pipe = (...fns) => (...xs) => {
@@ -22,6 +27,7 @@ const map = (fn) => (f) => {
 const last = (xs) => {
   return xs[xs.length - 1]
 }
+
 /*
 //:: Int -> [a] -> a
 const nth = (n) => (xs) => {
@@ -40,6 +46,7 @@ const adjust = (fn) => (i) => (list) => {
   return copy
 }
 */
+
 //:: Object -> Array
 const toPairs = (obj) => {
   return Reflect.ownKeys(obj).map(key => [key, obj[key]])
@@ -132,7 +139,7 @@ const Either = (() => {
       return Left.isPrototypeOf(E)
     },
     bimap: (leftFn) => (rightFn) => (E) => {
-      E.bimap(leftFn)(rightFn)
+      return E.bimap(leftFn)(rightFn)
     }
   })
 
@@ -151,14 +158,22 @@ const IO = (() => {
     },
     map(fn) {
       return newIO(() => fn(this.__value()))
+    },
+    join() {
+      return newIO(() => {
+        return this.runIO().runIO()
+      })
+    },
+    chain(io_returning_fn) {
+      return this.map(io_returning_fn).join()
     }
   })
 
   const constructor = (fn) => {
-    if (Function.prototype.isPrototypeOf(fn)) {
+    if (fn instanceof Function) {
       return newIO(fn)
     } else {
-      throw new TypeError(`IO constructor expected type Function`)
+      throw new TypeError(`IO constructor expected instance of Function`)
     }
   }
 
@@ -166,9 +181,15 @@ const IO = (() => {
     return newIO(() => x)
   }
 
+  constructor.run = (io) => {
+    return io.runIO()
+  }
+
   constructor.sequence = (IO_list) => {
-    return IO(() => {
-      return IO_list.reduce(io => io.runIO(), [])
+    return newIO(() => {
+      return IO_list.reduce((accum, io) => {
+        return accum.concat(io.runIO())
+      }, [])
     })
   }
 
@@ -177,6 +198,13 @@ const IO = (() => {
 
 
 //* Domain Layer *//////////////////////////////////////
+
+//:: String -> Headers { 'Accept': String }
+const accept = (mediaTypeStr) => {
+  var accept_hdr = new window.Headers()
+  accept_hdr.append('Accept', mediaTypeStr)
+  return accept_hdr
+}
 
 //:: Object -> Promise String
 const fetchStr = ({ url, init }) => {
@@ -193,6 +221,28 @@ const toHTMLDocument = (str) => {
   return doc.documentElement
 }
 
+//:: HTMLDocument -> [String]
+const scrapeR_names = ($R) => {
+  return Array.from($R.querySelectorAll('section.card'))
+  .map(card => card.getAttribute('id'))
+  .sort()
+}
+
+//:: HTMLDocument -> [String]
+const scrapeS_names = ($S) => {
+  return Array.from($S.querySelectorAll('h4[name]'))
+    .map(h4 => last(h4.getAttribute('name').split('-')))
+    .sort()
+}
+
+//:: String -> IO _
+const consoleWarn = (str) => {
+  return IO(() => {
+    console.warn(str)
+    return undefined
+  })
+}
+
 //:: String -> IO (Either String HTMLElement)
 const getElementByDataKey = (key) => {
   return IO(() => {
@@ -206,17 +256,20 @@ const getElementByDataKey = (key) => {
 
 //:: String -> Node -> IO _
 const setNodeTextContent = (str) => (N) => {
-  //return IO(() => {
+  return IO(() => {
     N.textContent = str
     return undefined
-  //})
+  })
 }
 
-//:: String -> Headers { 'Accept': String }
-const accept = (mediaTypeStr) => {
-  var accept_hdr = new window.Headers()
-  accept_hdr.append('Accept', mediaTypeStr)
-  return accept_hdr
+//:: (String, String) -> IO _
+const getElementByDataKey_setNodeTextContent = ([key, str]) => {
+  return getElementByDataKey(key)
+    .chain(E => {
+      return E.isLeft
+        ? IO(() => E.map(pipe(consoleWarn, IO.run)))
+        : IO(() => E.map(pipe(setNodeTextContent(str), IO.run)))
+    })
 }
 
 
@@ -226,31 +279,13 @@ const accept = (mediaTypeStr) => {
 const fetchDOM = pipeP(fetchStr, toHTMLDocument)
 
 //:: Object -> Promise [String]
-const get_R_names = pipeP(
-  fetchDOM,
-  ($R) => {
-    return Array.from($R.querySelectorAll('section.card'))
-    .map(card => card.getAttribute('id'))
-    .sort()
-  })
+const get_R_names = pipeP(fetchDOM, scrapeR_names)
 
 //:: Object -> Promise [String]
-const get_S_names = pipeP(
-  fetchDOM,
-  ($S) => {
-    return Array.from($S.querySelectorAll('h4[name]'))
-      .map(h4 => last(h4.getAttribute('name').split('-')))
-      .sort()
-  })
+const get_S_names = pipeP(fetchDOM, scrapeS_names)
 
 //:: Object -> IO _
-const DataBind = pipe(
-  toPairs,
-  map(([key, str]) => {
-    return getElementByDataKey(key).map
-      (Either.bimap (console.warn) (setNodeTextContent(str)))
-  }),
-  IO.sequence)
+const DataBind = pipe(toPairs, map(getElementByDataKey_setNodeTextContent), IO.sequence)
 
 
 //* Input Data */////////////////////////////////////////
