@@ -23,20 +23,36 @@ const map = (fn) => (f) => {
   return f.map(fn)
 }
 
+//:: [a] -> [a] -> [a]
+const intersection = (xs) => (xs2) => {
+  return xs.filter(x => xs2.includes(x))
+}
+
+//:: [a] -> [a] -> [a]
+const difference = (xs) => (xs2) => {
+  return xs.filter(x => !xs2.includes(x))
+}
+
+//:: [(a, b, ...) -> n] -> [a, b, ...] -> [n]
+const juxt = (fns) => (xs) => {
+  return fns.map(fn =>
+    xs.slice(1).reduce((partial, x) => partial(x), fn(xs[0])))
+}
+
 //:: [a] -> a
 const last = (xs) => {
   return xs[xs.length - 1]
+}
+
+//:: (a -> b -> c) -> b -> a -> c
+const flip = (fn) => (b) => (a) => {
+  return fn(a)(b)
 }
 
 /*
 //:: Int -> [a] -> a
 const nth = (n) => (xs) => {
   return xs[n]
-}
-
-//:: (a -> b -> c) -> b -> a -> c
-const flip = (fn) => (b) => (a) => {
-  return fn(a)(b)
 }
 
 //:: (a -> a) -> Number -> [a] -> [a]
@@ -294,7 +310,17 @@ const get_R_names = pipeP(fetchDOM, scrapeR_names)
 const get_S_names = pipeP(fetchDOM, scrapeS_names)
 
 //:: Object -> IO _
-const DataBind = pipe(toPairs, map(getElementByDataKey_setNodeTextContent), IO.sequence)
+const DataBind = pipe(
+  toPairs,
+  map(getElementByDataKey_setNodeTextContent),
+  IO.sequence)
+
+//:: [[a], [a]] -> [[a], [a], [a]]
+const intersectionAndDiffs = juxt([
+  intersection,
+  difference,
+  flip(difference)
+])
 
 
 //* Input Data */////////////////////////////////////////
@@ -312,15 +338,10 @@ const s_url = {
 
 Promise.all([get_R_names(r_url), get_S_names(s_url)])
   // Determine shared function names, R-only names, and S-only names
-  .then(([R_names, S_names]) => [
-    R_names.filter(n => S_names.includes(n)),
-    R_names.filter(n => !S_names.includes(n)),
-    S_names.filter(n => !R_names.includes(n))
-  ])
-
-  // Side-Effect: Bind data values to the page
+  .then(intersectionAndDiffs)
+  // Create object for DataBind
   .then(([shared, R_only, S_only]) => {
-    DataBind({
+    return {
       'ramda-total': R_only.length + shared.length,
       'sanctuary-total': S_only.length + shared.length,
       'shared-count': shared.length,
@@ -329,8 +350,10 @@ Promise.all([get_R_names(r_url), get_S_names(s_url)])
       'ramda-only-fns': R_only.join('\n'),
       'sanctuary-only-count': S_only.length,
       'sanctuary-only-fns': S_only.join('\n')
-    }).runIO()
+    }
   })
+  .then(DataBind)
+  .then(IO.run)
 
 .catch(err => {
   console.error(err)
