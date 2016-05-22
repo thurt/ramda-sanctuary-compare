@@ -1,5 +1,29 @@
 
-//* Library *///////////////////////////////////////////
+const Generator = Object.freeze({
+  //:: (a -> b) -> (Generator ([a] -> b))
+  /* returns a generator which will apply
+     action to ea value sequentially in xs
+   */
+  seq(action) {
+    return function* applyAction(xs) {
+      for (var x of xs) {
+        yield action(x)
+      }
+    }
+  },
+  //:: Generator -> _
+  /* automatically steps generator every ~x ms
+     until the generator is exhausted
+   */
+  auto: (ms) => (gen) => {
+    if (!gen.next().done) {
+      setTimeout(() => Generator.auto(ms)(gen), ms)
+    }
+  }
+})
+
+
+//* FP Library *///////////////////////////////////////////
 //:: a -> a
 const trace = (x) => {
   console.log(x)
@@ -171,19 +195,19 @@ const Either = (() => {
 
 // IO type
 const IO = (() => {
-  const newIO = (fn) => {
-    return Object.freeze(Object.create(IO, { __value: { value: fn }}))
+  const new_io = (fn) => {
+    return Object.freeze(Object.create(io, { __value: { value: fn }}))
   }
 
-  const IO = Object.freeze({
-    runIO(...args) {
-      return this.__value(...args)
+  const io = {
+    runIO(value) {
+      return this.__value(value)
     },
     map(fn) {
-      return newIO(() => fn(this.__value()))
+      return new_io(() => fn(this.__value()))
     },
     join() {
-      return newIO(() => {
+      return new_io(() => {
         return this.runIO().runIO()
       })
     },
@@ -193,38 +217,48 @@ const IO = (() => {
     ap(io_value) {
       return io_value.map(this.__value)
     }
-  })
+  }
 
-  const constructor = (fn) => {
+  const IO = (fn) => {
     if (fn instanceof Function) {
-      return newIO(fn)
+      return new_io(fn)
     } else {
       throw new TypeError(`IO constructor expected instance of Function`)
     }
   }
 
-  constructor.of = (x) => {
-    return newIO(() => x)
+  IO.of = (x) => {
+    return new_io(() => x)
   }
 
-  constructor.run = (io) => {
+  IO.run = (io) => {
     return io.runIO()
   }
 
   //:: (a -> b) -> a -> IO b
-  constructor.wrap = (fn) => (_value) => {
-    return constructor.of(_value).map(fn)
+  IO.wrap = (fn) => (_value) => {
+    return IO.of(_value).map(fn)
   }
 
-  constructor.sequence = (IO_list) => {
+  //:: [IO] -> IO _
+  IO.sequence = IO.wrap(
+    pipe(
+      Generator.seq(IO.run),
+      Generator.auto(10)
+    ))
+
+  /*
+  constructor.sequence => (IO_list) => {
+    return IO.of
     return newIO(() => {
       return IO_list.reduce((accum, io) => {
         return accum.concat(io.runIO())
       }, [])
     })
   }
+  */
 
-  return Object.freeze(constructor)
+  return Object.freeze(IO)
 })()
 
 
