@@ -189,6 +189,9 @@ const IO = (() => {
     },
     chain(io_returning_fn) {
       return this.map(io_returning_fn).join()
+    },
+    ap(io_value) {
+      return io_value.map(this.__value)
     }
   })
 
@@ -207,9 +210,10 @@ const IO = (() => {
   constructor.run = (io) => {
     return io.runIO()
   }
-  //:: (b -> c) -> (a -> b) -> b -> c
-  constructor.wrap = (fn) => (value) => {
-    return constructor.of(value).map(fn)
+
+  //:: (a -> b) -> a -> IO b
+  constructor.wrap = (fn) => (_value) => {
+    return constructor.of(_value).map(fn)
   }
 
   constructor.sequence = (IO_list) => {
@@ -270,16 +274,14 @@ const consoleWarn = (str) => {
   })
 }
 
-//:: String -> IO (Either String HTMLElement)
-const getElementByDataKey = (key) => {
-  return IO(() => {
-    const el = document.querySelector(`[data-key=${key}]`)
+//:: IO (String -> Either String HTMLElement)
+const getElementByDataKey = IO((key) => {
+  const el = document.querySelector(`[data-key=${key}]`)
 
-    return (Maybe(el).isNothing)
-      ? Either.Left(`get element by data-key "${key}" is not found`)
-      : Either.Right(el)
-  })
-}
+  return (Maybe(el).isNothing)
+    ? Either.Left(`get element by data-key "${key}" is not found`)
+    : Either.Right(el)
+})
 
 //:: String -> Node -> IO _
 const setNodeTextContent = (str) => (N) => {
@@ -291,10 +293,11 @@ const setNodeTextContent = (str) => (N) => {
 
 //:: (String, String) -> IO _
 const getElementByDataKey_setNodeTextContent = ([key, str]) => {
-  return getElementByDataKey(key)
+  return getElementByDataKey
+    .ap(IO.of(key))
     .chain(ifElse(Either.isLeft)
-        (IO.wrap(map(pipe(consoleWarn, IO.run))))
-        (IO.wrap(map(pipe(setNodeTextContent(str), IO.run)))))
+      (IO.wrap(map(pipe(consoleWarn, IO.run))))
+      (IO.wrap(map(pipe(setNodeTextContent(str), IO.run)))))
 }
 
 
