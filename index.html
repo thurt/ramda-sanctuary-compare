@@ -4,6 +4,12 @@
     <meta charset="utf-8"/>
     <title>Ramda-Sanctuary Compare</title>
     <style type="text/css">
+      #error {
+        color: red;
+      }
+      .flex {
+        display: flex;
+      }
       .col {
         padding: 0 2em;
       }
@@ -12,11 +18,12 @@
   <body>
     <div>
       <h2>Compare Results</h2>
+      <div id="error"></div>
       <div>
         <div>Ramda Total: <span data-key="ramda-total">?</span></div>
         <div>Sanctuary Total: <span data-key="sanctuary-total">?</span></div>
       </div>
-      <div style="display:flex">
+      <div class="flex">
         <div class="col">
           <h3>Shared Functions (<span data-key="shared-count">?</span>)</h3>
           <pre data-key="shared-fns"></pre>

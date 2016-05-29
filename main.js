@@ -58,7 +58,7 @@ const difference = (xs) => (xs2) => {
 }
 
 //:: [(a, b, ...) -> n] -> [a, b, ...] -> [n]
-const juxt = (fns) => (xs) => {
+const applyFunctions = (fns) => (xs) => {
   return fns.map(fn =>
     xs.slice(1).reduce((partial, x) => partial(x), fn(xs[0])))
 }
@@ -244,19 +244,8 @@ const IO = (() => {
   IO.sequence = IO.wrap(
     pipe(
       Generator.seq(IO.run),
-      Generator.auto(10)
+      Generator.auto(0)
     ))
-
-  /*
-  constructor.sequence => (IO_list) => {
-    return IO.of
-    return newIO(() => {
-      return IO_list.reduce((accum, io) => {
-        return accum.concat(io.runIO())
-      }, [])
-    })
-  }
-  */
 
   return Object.freeze(IO)
 })()
@@ -301,34 +290,34 @@ const scrapeS_names = ($S) => {
 }
 
 //:: String -> IO _
-const consoleWarn = (str) => {
-  return IO(() => {
-    console.warn(str)
-    return undefined
-  })
-}
+const consoleWarn = (str) => IO(() => {
+  window.console.warn(str)
+  return undefined
+})
 
-//:: IO (String -> Either String HTMLElement)
-const getElementByDataKey = IO((key) => {
-  const el = document.querySelector(`[data-key=${key}]`)
+//:: String -> IO _
+const consoleError = (str) => IO(() => {
+  window.console.error(str)
+  return undefined
+})
 
+//:: String -> IO (Either String HTMLElement)
+const getElementByQuery = (query) => IO(() => {
+  const el = document.querySelector(query)
   return (Maybe(el).isNothing)
-    ? Either.Left(`get element by data-key "${key}" is not found`)
+    ? Either.Left(`get element by "${query}" is not found`)
     : Either.Right(el)
 })
 
 //:: String -> Node -> IO _
-const setNodeTextContent = (str) => (N) => {
-  return IO(() => {
-    N.textContent = str
-    return undefined
-  })
-}
+const setNodeTextContent = (str) => (N) => IO(() => {
+  N.textContent = str
+  return undefined
+})
 
 //:: (String, String) -> IO _
 const getElementByDataKey_setNodeTextContent = ([key, str]) => {
-  return getElementByDataKey
-    .ap(IO.of(key))
+  return getElementByQuery(`[data-key=${key}]`)
     .chain(ifElse(Either.isLeft)
       (IO.wrap(map(pipe(consoleWarn, IO.run))))
       (IO.wrap(map(pipe(setNodeTextContent(str), IO.run)))))
@@ -337,14 +326,11 @@ const getElementByDataKey_setNodeTextContent = ([key, str]) => {
 
 //* Domain Compositions *///////////////////////////////
 
-//:: Object -> Promise HTMLDocument
-const fetchDOM = pipeP(fetchStr, toHTMLDocument)
+//:: Object -> Promise [String]
+const get_R_names = pipeP(fetchStr, toHTMLDocument, scrapeR_names)
 
 //:: Object -> Promise [String]
-const get_R_names = pipeP(fetchDOM, scrapeR_names)
-
-//:: Object -> Promise [String]
-const get_S_names = pipeP(fetchDOM, scrapeS_names)
+const get_S_names = pipeP(fetchStr, toHTMLDocument, scrapeS_names)
 
 //:: Object -> IO _
 const DataBind = pipe(
@@ -352,12 +338,22 @@ const DataBind = pipe(
   map(getElementByDataKey_setNodeTextContent),
   IO.sequence)
 
-//:: [[a], [a]] -> [[a], [a], [a]]
-const intersectionAndDiffs = juxt([
-  intersection,
-  difference,
-  flip(difference)
-])
+//:: [[String], [String]] -> IO _
+const performComparisonsAndDataBind = pipe(
+  applyFunctions([intersection, difference, flip(difference)]),
+  ([shared, R_only, S_only]) => {
+    return {
+      'ramda-total': R_only.length + shared.length,
+      'sanctuary-total': S_only.length + shared.length,
+      'shared-count': shared.length,
+      'shared-fns': shared.join('\n'),
+      'ramda-only-count': R_only.length,
+      'ramda-only-fns': R_only.join('\n'),
+      'sanctuary-only-count': S_only.length,
+      'sanctuary-only-fns': S_only.join('\n')
+    }
+  },
+  DataBind)
 
 
 //* Input Data */////////////////////////////////////////
@@ -371,27 +367,13 @@ const s_url = {
 }
 
 
-//* "Fork" & Merge operations */////////////////////////////
+//* "Fork" */////////////////////////////
 
 Promise.all([get_R_names(r_url), get_S_names(s_url)])
-  // Determine shared function names, R-only names, and S-only names
-  .then(intersectionAndDiffs)
-  // Create object for DataBind
-  .then(([shared, R_only, S_only]) => {
-    return {
-      'ramda-total': R_only.length + shared.length,
-      'sanctuary-total': S_only.length + shared.length,
-      'shared-count': shared.length,
-      'shared-fns': shared.join('\n'),
-      'ramda-only-count': R_only.length,
-      'ramda-only-fns': R_only.join('\n'),
-      'sanctuary-only-count': S_only.length,
-      'sanctuary-only-fns': S_only.join('\n')
-    }
+  .then(pipe(performComparisonsAndDataBind, IO.run))
+  .catch(err => {
+    getElementByQuery('#error')
+      .map(map(pipe(setNodeTextContent(`ERRUERS! -- ${err}`), IO.run)))
+      .runIO()
+    consoleError(err).runIO()
   })
-  .then(DataBind)
-  .then(IO.run)
-
-.catch(err => {
-  console.error(err)
-})
