@@ -16,27 +16,7 @@
     </style>
   </head>
   <body>
-    <div>
-      <h2>Compare Results</h2>
-      <div id="error"></div>
-      <div>
-        <div>Ramda Total: <span data-key="ramda-total">?</span></div>
-        <div>Sanctuary Total: <span data-key="sanctuary-total">?</span></div>
-      </div>
-      <div class="flex">
-        <div class="col">
-          <h3>Shared Functions (<span data-key="shared-count">?</span>)</h3>
-          <pre data-key="shared-fns"></pre>
-        </div>
-        <div class="col">
-          <h3>Ramda Only (<span data-key="ramda-only-count">?</span>)</h3>
-          <pre data-key="ramda-only-fns"></pre>
-        </div>
-        <div class="col">
-          <h3>Sanctuary Only (<span data-key="sanctuary-only-count">?</span>)</h3>
-          <pre data-key="sanctuary-only-fns"></pre>
-      </div>
-    </div>
-    <script src="main.js"></script>
+    <div id="state"></div>
+    <script src="bundle.js"></script>
   </body>
 </html>

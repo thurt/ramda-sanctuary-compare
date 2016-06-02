@@ -1,0 +1,28 @@
+{
+  "name": "ramda-sanctuary-compare",
+  "version": "1.0.0",
+  "description": "This is a little comparison between the function names of Ramda and Sanctuary. The results are scraped live so the results could break if the associated pages change.",
+  "main": "main.js",
+  "scripts": {
+    "watch:build": "watchify ./main.js --debug --outfile ./bundle.js",
+    "distribute": "browserify ./main.js --outfile ./bundle.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thurt/ramda-sanctuary-compare.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/thurt/ramda-sanctuary-compare/issues"
+  },
+  "homepage": "https://github.com/thurt/ramda-sanctuary-compare#readme",
+  "dependencies": {
+    "fp-lib": "github:thurt/fp-lib",
+    "snabbdom": "^0.5.0"
+  },
+  "devDependencies": {
+    "browserify": "^13.0.1",
+    "watchify": "^3.7.0"
+  }
+}
