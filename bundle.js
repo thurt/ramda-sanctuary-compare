@@ -1,9 +1,16 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-const { curry, pipe, pipeP, applyFunctions, intersection, difference, flip, last } = require('fp-lib')
+const { pipe, pipeP, applyFunctions, intersection, difference, flip, last } = require('fp-lib')
 const snabbdom = require('snabbdom')
-const patch = snabbdom.init([])
-const h = require('snabbdom/h')
 
+//* Domain Layer *//////////////////////////////////////
+
+//:: ((HTMLElement || VNode), VNode) -> _
+const patch = snabbdom.init([])
+
+//:: __polymorphic__ -> VNode
+const v = require('snabbdom/h')
+
+//:: Object -> VNode
 const createState = ({
   errorMsg,
   ramdaTotal,
@@ -15,32 +22,29 @@ const createState = ({
   sanctuaryOnlyCount,
   sanctuaryOnlyFns
 }) => {
-    return h('div', [
-    h('h2', 'Compare Results'),
-    h('div#error', errorMsg||''),
-    h('div', [
-      h('div', `Ramda Total: ${ramdaTotal||'?'}`),
-      h('div', `Sanctuary Total: ${sanctuaryTotal||'?'}`)
+    return v('div', [
+    v('h2', 'Compare Results'),
+    v('div#error', errorMsg||''),
+    v('div', [
+      v('div', `Ramda Total: ${ramdaTotal||'?'}`),
+      v('div', `Sanctuary Total: ${sanctuaryTotal||'?'}`)
     ]),
-    h('div.flex', [
-      h('div.col', [
-        h('h3', `Shared Functions (${sharedCount||'?'})`),
-        h('pre', sharedFns||'')
+    v('div.flex', [
+      v('div.col', [
+        v('h3', `Shared Functions (${sharedCount||'?'})`),
+        v('pre', sharedFns||'')
       ]),
-      h('div.col', [
-        h('h3', `Ramda Only (${ramdaOnlyCount||'?'})`),
-        h('pre', ramdaOnlyFns||'')
+      v('div.col', [
+        v('h3', `Ramda Only (${ramdaOnlyCount||'?'})`),
+        v('pre', ramdaOnlyFns||'')
       ]),
-      h('div.col', [
-        h('h3', `Sanctuary Only (${sanctuaryOnlyCount||'?'})`),
-        h('pre', sanctuaryOnlyFns||'')
+      v('div.col', [
+        v('h3', `Sanctuary Only (${sanctuaryOnlyCount||'?'})`),
+        v('pre', sanctuaryOnlyFns||'')
       ]),
     ])
   ])
 }
-
-
-//* Domain Layer *//////////////////////////////////////
 
 //:: String -> Headers { 'Accept': String }
 const accept = (mediaTypeStr) => {
@@ -49,11 +53,11 @@ const accept = (mediaTypeStr) => {
   return accept_hdr
 }
 
-//:: Object -> Promise String
+//:: Object -> Promise Error || Promise String
 const fetchStr = ({ url, init }) => {
-  return window.fetch(url, init).then((res, rej) => {
-    if (rej) throw rej // could throw
-    return res.text()
+  return window.fetch(url, init).then((result, reject) => {
+    if (reject) throw reject // could throw
+    return result.text()
   })
 }
 
@@ -82,16 +86,16 @@ const scrapeS_names = ($S) => {
 //* Domain Compositions *///////////////////////////////
 
 //:: Object -> Promise [String]
-const get_R_names = pipeP(fetchStr, toHTMLDocument, scrapeR_names)
+const fetch_R_names = pipeP(fetchStr, pipe(toHTMLDocument, scrapeR_names))
 
 //:: Object -> Promise [String]
-const get_S_names = pipeP(fetchStr, toHTMLDocument, scrapeS_names)
+const fetch_S_names = pipeP(fetchStr, pipe(toHTMLDocument, scrapeS_names))
 
-//:: [[String], [String]] -> IO _
-const performComparisonsAndCreateNewState = pipe(
+//:: [[String], [String]] -> Object
+const doComparisonsAndCreateResultObject = pipe(
   applyFunctions([intersection, difference, flip(difference)]),
   ([shared, R_only, S_only]) => {
-    return createState({
+    return {
       ramdaTotal: R_only.length + shared.length,
       sanctuaryTotal: S_only.length + shared.length,
       sharedCount: shared.length,
@@ -100,12 +104,11 @@ const performComparisonsAndCreateNewState = pipe(
       ramdaOnlyFns: R_only.join('\n'),
       sanctuaryOnlyCount: S_only.length,
       sanctuaryOnlyFns: S_only.join('\n')
-    })
+    }
   })
 
 //* Input Data */////////////////////////////////////////
 
-const state = createState({})
 const r_url = {
   url: 'http://ramdajs.com/0.21.0/docs/'
 }
@@ -113,21 +116,18 @@ const s_url = {
   url: 'https://api.github.com/repos/sanctuary-js/sanctuary/readme',
   init: { 'headers': accept('application/vnd.github.v3.html') }
 }
-
+const page_state = createState({})
 
 //* "Fork" */////////////////////////////
 
+// initiate parallel fetches
+Promise.all([fetch_R_names(r_url), fetch_S_names(s_url)])
+  .then(doComparisonsAndCreateResultObject)
+  .then(resultObj => patch(page_state, createState(resultObj)))
+  .catch(error => patch(page_state, createState({ errorMsg: String(error) })))
+
 // initial rendering with no values
-patch(document.getElementById('state'), state)
-
-Promise.all([get_R_names(r_url), get_S_names(s_url)])
-  .then(pipe(
-    performComparisonsAndCreateNewState,
-    curry(patch)(state)))
-  .catch(err => {
-    patch(state, createState({ errorMsg: String(err.stack) }))
-  })
-
+patch(document.getElementById('state'), page_state)
 },{"fp-lib":2,"snabbdom":6,"snabbdom/h":3}],2:[function(require,module,exports){
 // FUNCTIONS /////////////////////////////////////////////////////
 
